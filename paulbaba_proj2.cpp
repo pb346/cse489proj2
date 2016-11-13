@@ -66,17 +66,15 @@ void displayHelp()
 	printf("| 6) disable   |\n");
 	printf("| 7) crash     |\n");
 }
-void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type)
+void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, int optVal)
 {
 	//first send neighbors updates
 	//then expect packets from neighbors
-	if(type == 0)
+	if(type == 0 )
 	{
 		int fd;
 		struct sockaddr_in sockInfo;
 		char buf[560];
-		buf[0] = 'O';
-		buf[1] = 'K';
 		Node* iter = ServerList;
 		Node* neigh = ServerList;
 		Node* temp = ServerList;
@@ -140,6 +138,11 @@ void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type)
 			{
 				if(neigh->serverID == iter->neighbors.at(i)->ID && (neigh->serverID != hostIndex))
 				{
+					if(iter->neighbors.at(i)->cost == -1)
+					{
+						neigh = neigh->next;
+						continue;
+					}
 					memset((char*)&sockServer, 0, sizeof(sockServer));
 					sockServer.sin_family = AF_INET;
 					sockServer.sin_port = htons(neigh->port);
@@ -152,6 +155,42 @@ void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type)
 			}
 		}
 	}
+	/*
+	if(type == 1)
+	{
+		int fd;
+		struct sockaddr_in sockServer;
+		char buf[560];
+		Node* iter = ServerList;
+		Node* neigh = ServerList;
+		Node* temp = ServerList;
+
+		while(iter != NULL) // find what node current server is
+		{
+			if(iter->serverID == hostIndex)
+			{
+				break;
+			}
+			iter = iter->next;
+		}
+		memset(buf, 0, sizeof(buf));
+		uint16_t u16 = htons(type);
+		memcpy(buf, &u16, 2);
+		u16 = htons(hostIndex);
+		memcpy(buf+2, &u16, 2);
+		//send server that is disconnecting
+		memset((char*)&sockServer, 0, sizeof(sockServer));
+		Node* disableIt = ServerList;
+		while(disableIt->serverID != optVal)
+			disableIt = disableIt->next;
+
+		sockServer.sin_family = AF_INET;
+		sockServer.sin_port = htons(disableIt->port);
+		sockServer.sin_addr.s_addr = inet_addr(disableIt->IP);
+		int addrlen = sizeof(sockServer);
+		sendto(fd,buf,sizeof(buf),0, (struct sockaddr *)&sockServer, addrlen);
+
+	}*/
 }
 
 void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex)
@@ -230,7 +269,13 @@ void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex)
 	}
 	else
 	{
-		printf("UPDATE SUCESSFUL\n");
+		printf("update %i %i ", ID1, ID2);
+		if(lcost == -1)
+		{
+			printf("inf SUCCESS\n");
+		}
+		else
+			printf("%i SUCCESS\n", lcost);
 		iter->neighbors.at(existID1Flag - 1)->cost = lcost;
 	}
 }
@@ -492,8 +537,7 @@ int setupReceive(int port)
 }
 void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int* receivedServers)
 {
-	char buf[550];
-	printf("RECEIVING");
+	char buf[560];
 	struct sockaddr_in nothing;
 	Node* iter = ServerList;
 	Node* iter2 = ServerList;
@@ -522,6 +566,12 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 		{
 			*packetCount+=1;
 		}
+		if(type == 1)
+		{
+			printf("BEING DISABLED\n");
+			return;
+			//disable
+		}
 		/*header*/
 		memcpy(&u16, buf+2, 2);
 		val = ntohs(u16);
@@ -540,7 +590,7 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 		else if(strcmp(IP, "128.205.36.34") == 0)
 			senderID = 5;
 		receivedServers[senderID-1] = 1;
-		printf("FROM %i\n", senderID);
+		printf("RECEIVED A MESSAGE FROM SERVER %i\n", senderID);
 		while(iter->serverID != (senderID))
 			iter = iter->next;
 		int offset = 22;
@@ -604,6 +654,25 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 		return;
 	}
 }
+
+int disable(Node* ServerList, int disableID, int hostIndex)
+{
+	Node* iter = ServerList;
+	bool found = false;
+	while(iter->serverID != hostIndex)
+		iter = iter->next;
+	for(int i = 0; i < iter->neighbors.size(); i++)
+	{
+		if(iter->neighbors.at(i)->ID == disableID)
+		{
+			found = true;
+			return 1;
+		}
+	}
+	printf("update %1$i Error: Server %1$i is not a neighbor\n", disableID);
+	return 0;
+
+}
 int main(int argc, char* argv[])
 {
 	printf("Starting Program\n");
@@ -617,6 +686,7 @@ int main(int argc, char* argv[])
 	int setupDelay = 0;
 	int interval;
 	int sendStatus = 0;
+	int receiveCount = 0;
 	int numServers;
 	if(argc < 4)
 	{
@@ -680,7 +750,14 @@ int main(int argc, char* argv[])
 
 		if(FD_ISSET(Masterfd, &fdList))
 		{
+			if(receiveCount == 2)
+			{
+				updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
+				receiveCount = 0;
+				continue;
+			}
 			readMessage(Masterfd, &packetCount, ServerList, hostIndex, receivedServers);
+			receiveCount += 1;
 		}
 
 		if(FD_ISSET(0, &fdList)) //process user input
@@ -708,7 +785,7 @@ int main(int argc, char* argv[])
 			}
 			if(strcmp(command, "step") == 0)
 			{
-				updateNeighbors(ServerList, hostIndex, numServers, 0);
+				updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
 				printf("Step Successful\n");
 			}
 			if(strcmp(command, "packets") == 0)
@@ -728,7 +805,13 @@ int main(int argc, char* argv[])
 				index++;
 				memcpy(IDbuf, input + index, 8);
 				int disableID = atoi(IDbuf);
-				printf("ID %i\n", disableID);
+				if(disable(ServerList, disableID, hostIndex))
+				{
+					update(&ServerList, hostIndex, disableID, -1, hostIndex);
+					updateNeighbors(ServerList, hostIndex, numServers, 1, disableID);
+					printf("disable %i SUCCESS\n", disableID);
+				}
+
 
 			}
 			if(strcmp(command, "help") == 0)
@@ -741,7 +824,7 @@ int main(int argc, char* argv[])
 		{
 			printf("SENDING\n");
 			sendStatus += 1;
-			updateNeighbors(ServerList, hostIndex, numServers, 0);
+			updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
 			if(setupDelay != 0)
 			{
 				for(int i = 0; i < 5; i++)
@@ -785,6 +868,10 @@ int main(int argc, char* argv[])
 				if((missedServers[i] == unresponseCount) )//&& isNeighbor)
 				{
 					printf("SERVER %i SET TO INF\n", i+1);
+					update(&ServerList, hostIndex, i+1, -1, hostIndex);
+					update(&ServerList, i+1, hostIndex, -1, i+1);
+					updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
+
 				}
 			}
 			setupDelay += 1;	//needs to be a better way
