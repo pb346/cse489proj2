@@ -22,7 +22,7 @@
 int distancePackets = 0;
 
 
-/* Routing Table Data Structure */
+/****** Routing Table Data Structure ******/
 struct Link
 {
 	int ID;
@@ -37,9 +37,9 @@ struct Node
 	Node* next;
 };
 
-/* Routing Table Data Structure */
+/****** Routing Table Data Structure ******/
 
-/* Message Structure */
+/******* Message Structure Distance Vector Updates ******/
 struct dataChunk
 {
 	uint16_t serverPort1;
@@ -54,7 +54,7 @@ struct header
 	int serverPort;
 	char serverIP[16];
 };
-/*Message Structure */
+/******Message Structure Distance Vector Updates ******/
 
 void displayHelp()
 {
@@ -67,7 +67,7 @@ void displayHelp()
 	printf("| 6) disable   |\n");
 	printf("| 7) crash     |\n");
 }
-void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, int optVal)
+void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, int optVal, int disableList[])
 {
 	//first send neighbors updates
 	//then expect packets from neighbors
@@ -137,6 +137,7 @@ void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, 
 			neigh = ServerList;
 			while(neigh != NULL)
 			{
+
 				if(neigh->serverID == iter->neighbors.at(i)->ID && (neigh->serverID != hostIndex))
 				{
 					if(iter->neighbors.at(i)->cost == -1)
@@ -149,7 +150,12 @@ void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, 
 					sockServer.sin_port = htons(neigh->port);
 					sockServer.sin_addr.s_addr = inet_addr(neigh->IP);
 					int addrlen = sizeof(sockServer);
-					sendto(fd,buf,sizeof(buf),0, (struct sockaddr *)&sockServer, addrlen);
+
+					if(disableList[(neigh->serverID) -1] == 0)
+					{
+						//printf("SENDING\n");
+						sendto(fd,buf,sizeof(buf),0, (struct sockaddr *)&sockServer, addrlen);
+					}
 
 				}
 				neigh = neigh->next;
@@ -194,12 +200,18 @@ void updateNeighbors(Node* ServerList, int hostIndex, int numServers, int type, 
 	}*/
 }
 
-void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex)
+void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex, int type)
 {
 	Node* iter = *ServerList;
 	Node* iter2 = *ServerList;
 	int existID1Flag = 0;
 	int existID2Flag = 0;
+	if(ID1 != hostIndex)
+	{
+		printf("update %i, %i %i", ID1, ID2, lcost);
+		printf(" ERROR: parameter 1 must be the current server\n");
+		return;
+	}
 	while(iter != NULL) // find what node current server is
 	{
 		if(iter->serverID == ID1)
@@ -265,11 +277,15 @@ void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex)
 	}
 	if(existID1Flag == 0)
 	{
+		if(type == 1)
+			return;
 		printf("update %i, %i, %i Error: Server %i not neighboring Server %i\n",ID1, ID2, lcost, ID1, ID2);
 		return;
 	}
 	else
 	{
+		if(type != 1)
+		{
 		printf("update %i %i ", ID1, ID2);
 		if(lcost == -1)
 		{
@@ -277,6 +293,7 @@ void update(Node** ServerList, int ID1, int ID2, int lcost, int hostIndex)
 		}
 		else
 			printf("%i SUCCESS\n", lcost);
+		}
 		iter->neighbors.at(existID1Flag - 1)->cost = lcost;
 	}
 }
@@ -342,14 +359,176 @@ int parseUpdate(char* input, int* ID1, int* ID2, int* lcost, int index)
 	return OK;
 }
 
-void display(Node* ServerList, int hostIndex)
+void display(Node* ServerList, int hostIndex, int disableList[])
 {
-	printf(" _______________________________________________\n");
-	printf("| Destination ID       Next-Hop ID        Cost  |\n");
-	printf("|_______________________________________________|\n");
+	printf(" ________________________________________\n");
+	printf("| Destination ID   Next-Hop ID     Cost  |\n");
+	printf("|________________________________________|\n");
 
 	Node* iter = ServerList;
 	Node* iter2 = ServerList;
+	int directNeigh = -1;
+
+	int currentLink = -1;
+	int linkCost = 1000;
+	int currentIndex = -1;
+	int runningCost = 0;
+	while(iter->serverID != hostIndex)
+		iter = iter->next;
+
+	for(int i = 1; i <= 5; i ++)
+	{
+		currentLink = -1;
+		linkCost = 1000;
+		runningCost = 0;
+		if(i == hostIndex)
+		{
+			if(disableList[hostIndex-1] != 1)
+			{
+				printf("     %i                  %i            %i\n", i, i, 0);
+			}
+			else
+			{
+				printf("     %i                  %i            inf\n", i, i);
+			}
+			continue;
+		}
+		if(disableList[i-1] == 1)
+		{
+			printf("     %i                  %i            inf\n", i, i);
+			continue;
+		}
+
+		for(int j = 0; j < iter->neighbors.size(); j++)//looks only locally
+		{
+			if( iter->neighbors.at(j)->ID == i && disableList[i-1]!= 0)
+			{
+				if(currentLink == -1)
+				{
+					currentLink = iter->neighbors.at(j)->ID;
+					currentIndex = j;
+					linkCost = iter->neighbors.at(j)->cost;
+				}
+				else
+				{
+					if((iter->neighbors.at(j)->cost < linkCost) && (iter->neighbors.at(j)->cost > 0))
+					{
+						currentLink = iter->neighbors.at(j)->ID;
+						currentIndex = j;
+						linkCost = iter->neighbors.at(j)->cost;
+					}
+				}
+			}
+		}
+		if( currentLink == -1)
+		{
+		for( int k = 0; k < iter->neighbors.size(); k++)
+		{
+			iter2 = ServerList;
+			while(iter2 != NULL)
+			{
+				if(iter2->serverID == iter->neighbors.at(k)->ID)
+				{
+					for(int l= 0; l < iter2->neighbors.size(); l++)
+					{
+						if(iter2->neighbors.at(l)->ID == i && disableList[i-1] != 1)
+						{
+							if(currentLink == -1 )
+							{
+								runningCost = iter->neighbors.at(k)->cost;
+								currentLink = iter2->neighbors.at(l)->ID;
+								currentIndex = l;
+								linkCost = iter2->neighbors.at(l)->cost;
+							}
+							else if((iter2->neighbors.at(l)->cost < linkCost) && (iter2->neighbors.at(l)->cost > 0 ))
+							{
+								runningCost = iter->neighbors.at(k)->cost;
+								currentLink = iter2->neighbors.at(l)->ID;
+								currentIndex = l;
+								linkCost = iter2->neighbors.at(l)->cost;
+							}
+						}
+					}
+				}
+				iter2 = iter2->next;
+			}
+		}
+	}
+		if(runningCost != 0)
+		{
+			linkCost += runningCost;
+		}
+		if(linkCost > 50 || linkCost == -1)
+		{
+			printf("     %i                  %i            inf\n", i, currentLink);
+		}
+		else
+		{
+			printf("     %i                  %i            %i\n", i, currentLink, linkCost);
+		}
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+			/*
+			if( iter->neighbors.at(j)->ID == i)
+			{
+														//server is direct neighbor
+				directNeigh = iter->neighbors.at(j)->ID;
+				break;
+			}
+		}
+		if(directNeigh == -1)													//not direct neighbor, try searching
+		{
+			for(int j = 0; j< iter->neighbors.size(); j++)//search each of server neighbors						//search links of server's neighbors
+			{
+				int discover = iter->neighbors.at(j)->ID;
+				int index = 0;
+				while(iter2->serverID != discover)//pull up neighbor node
+					iter2 = iter2->next;
+				for(int z = 0; z < iter2->neighbors.size(); z++)//check list for i
+				{
+					if(iter2->neighbors.at(z)->ID == i)
+					{
+						if(tempNeigh ==-1)
+						{
+							tempNeigh = iter2->serverID;
+						}
+						else if(iter2->neighbors.at(z)->cost < iter2->neighbors.at(tempNeigh)->cost)
+						{
+							tempNeigh = iter2->neighbors.at(z)->ID;
+							index = z;
+						}
+						//directNeigh = iter2->serverID;
+						//cost += iter2->neighbors.at(z)->cost;
+					}
+					//if(tempMain == -1)
+					//{
+					//	tempMain = tempNeigh;
+					//}
+					//if(1 )
+					//{
+
+					//}
+				}
+
+
+			}
+		}
+		printf("     %i                  %i            %i\n", i, i, i );
+
+
+	}*/
+	/*
 	std::vector<int> neighbors;
 	int counter = 1;
 	while(iter!= NULL)
@@ -371,7 +550,7 @@ void display(Node* ServerList, int hostIndex)
 		}
 		counter+=1;
 		iter = iter->next;
-	}
+	}*/
 	/*
 	for(int i = 0; i < (int)neighbors.size(); i++)
 	{
@@ -469,7 +648,6 @@ Node* readInput(int hostIndex, char* file, char* localIP, int* port, int* numSer
 			if(iter->serverID == hostIndex && selfFlag == 0)
 			{
 				selfFlag = 1;
-				printf("ADDING SELF\n");
 				Link* newLink = new Link;
 				newLink->ID = hostIndex;
 				newLink->cost = 0;
@@ -526,6 +704,8 @@ int setupReceive(int port)
 {
 	struct sockaddr_in  currentSock;
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
+	int val = 1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
 	memset((char*) &currentSock, 0 , sizeof(currentSock));
 	currentSock.sin_family = AF_INET;
 	currentSock.sin_port = htons(port);
@@ -536,12 +716,12 @@ int setupReceive(int port)
 	}
 	return fd;
 }
-void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int* receivedServers, int* disableList)
+void readMessage(int fd, int* packetCount, Node** ServerList, int hostIndex, int* receivedServers, int* disableList)
 {
 	char buf[560];
 	struct sockaddr_in nothing;
-	Node* iter = ServerList;
-	Node* iter2 = ServerList;
+	Node* iter = *ServerList;
+	Node* iter2 = *ServerList;
 	/*memset((char*)&receive, 0, sizeof(receive));
 	receive.sin_family = AF_INET;
 	receive.sin_port = htons(4091);
@@ -580,15 +760,16 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 			senderID = 2;
 		else if(strcmp(IP, "128.205.36.36") == 0)
 			senderID = 3;
-		else if(strcmp(IP, "128.205.36.35") == 0)
-			senderID = 4;
 		else if(strcmp(IP, "128.205.36.34") == 0)
+			senderID = 4;
+		else if(strcmp(IP, "128.205.36.35") == 0)
 			senderID = 5;
 		receivedServers[senderID-1] = 1;
 		if(disableList[senderID-1] == 1)
 		{
 			return;
 		}
+		/*
 		if(type == 1)
 		{
 			printf("BEING DISABLED\n");
@@ -619,10 +800,18 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 			return;
 
 		}
-
+		*/
+		if(senderID == -1)
+			return;
 		printf("RECEIVED A MESSAGE FROM SERVER %i\n", senderID);
-		while(iter->serverID != (senderID))
-			iter = iter->next;
+		while(iter != NULL)
+		{
+			if(iter->serverID == (senderID))
+				break;
+			else
+				iter = iter->next;
+		}
+
 		int offset = 22;
 		int index  = 0;
 		for( int i = 0; i < val; i++)
@@ -650,20 +839,68 @@ void readMessage(int fd, int* packetCount, Node* ServerList, int hostIndex, int*
 			if(strcmp(inIP, "128.205.36.34"))
 				index = 5;
 			*/
-			iter2 = ServerList;
+			iter2 = *ServerList;
 			int dupFlag = 0;
 			for(int i = 0; i < iter->neighbors.size(); i++)
 			{
 				if(iter->neighbors.at(i)->ID == ID)
 				{
+
+					if(cost > 50)
+					{
+						cost = -1;
+						//iter->neighbors.at(i)->cost = cost;
+					}
 					if(iter->neighbors.at(i)->cost == cost)
 					{
 						dupFlag = 1;
 					}
 					else
 					{
+						Node* newNode = *ServerList;
+						while(newNode != NULL)
+						{
+							if(newNode->serverID == senderID)
+							{
+								break;
+							}
+							newNode = newNode->next;
+						}
 						iter->neighbors.at(i)->cost = cost;
+						for(int z = 0; z < newNode->neighbors.size(); z++)
+						{
+							if(newNode->neighbors.at(z)->ID == ID)
+							{
+								newNode->neighbors.at(z)->cost = cost;
+							}
+						}
 						dupFlag = 1;
+
+						newNode = *ServerList;
+						while(newNode->serverID != hostIndex)
+							newNode = newNode->next;
+						printf("From hostNode %i\n", hostIndex);
+						for(int b= 0; b < newNode->neighbors.size(); b++)
+						{
+							if(newNode->neighbors.at(b)->ID == senderID)
+							{
+								newNode->neighbors.at(b)->cost = cost;
+							}
+						}
+						printf("From neighbor node\n");
+						newNode = *ServerList;
+						/* SEEMS TO BE REDUNDANT CODE */
+						while(newNode->serverID != ID)
+							newNode = newNode->next;
+						for(int b = 0; b < newNode->neighbors.size(); b++)
+						{
+							printf("ID %i Cost %i\n", newNode->neighbors.at(b)->ID, newNode->neighbors.at(b)->cost);
+							if(newNode->neighbors.at(b)->ID == senderID)
+							{
+								newNode->neighbors.at(b)->cost = cost;
+							}
+						}
+						/*SEEMS TO BE REDUNDANT CODE */
 					}
 				}
 
@@ -702,7 +939,7 @@ int disable(Node** ServerList, int disableID, int hostIndex)
 	{
 		if(iter2->neighbors.at(i)->ID == hostIndex)
 		{
-			printf("Dest %i, NextHop %i\n", iter2->serverID, hostIndex);
+			//printf("Dest %i, NextHop %i\n", iter2->serverID, hostIndex);
 			iter2->neighbors.at(i)->cost = -1;
 			found+=1;
 		}
@@ -718,13 +955,14 @@ int disable(Node** ServerList, int disableID, int hostIndex)
 int main(int argc, char* argv[])
 {
 	printf("Starting Program\n");
-	int disableList[5];
+	int disableList[5] = {0};
 	char file[128];
 	int packetCount = 0;
 	char localIP[64];
 	char command[16];
-	int receivedServers[5];
-	int missedServers[5];
+	int receivedServers[5] = {0};
+	int missedServers[5] = {0};
+
 	int localPort;
 	int setupDelay = 0;
 	int interval;
@@ -795,17 +1033,16 @@ int main(int argc, char* argv[])
 		{
 			if(receiveCount == 2)
 			{
-				updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
+				updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
 				receiveCount = 0;
 				continue;
 			}
-			readMessage(Masterfd, &packetCount, ServerList, hostIndex, receivedServers, disableList);
+			readMessage(Masterfd, &packetCount, &ServerList, hostIndex, receivedServers, disableList);
 			receiveCount += 1;
 		}
 
 		if(FD_ISSET(0, &fdList)) //process user input
 		{
-			printf("Processing Input\n");
 			memset(input, 0, 32);
 			memset(command, 0, 16);
 			int index = 0;
@@ -813,22 +1050,22 @@ int main(int argc, char* argv[])
 			while(input[index] != ' ' && input[index] != '\0')
 				index++;
 			memcpy(command, input, index);
-			if(command[0] == 'q' || strcmp(command, "quit") == 0)
+			if( strcmp(command, "quit") == 0)
 				break;
 			if(strcmp(command, "display") == 0)
-				display(ServerList, hostIndex);
+				display(ServerList, hostIndex, disableList);
 			if(strcmp(command, "update") == 0)
 			{
 				//printf("Updating\n");
 				int ID1, ID2, lcost;
 				if(parseUpdate(input, &ID1, &ID2, &lcost, index) == ERROR)
 					continue;
-				update(&ServerList, ID1, ID2, lcost, hostIndex);
+				update(&ServerList, ID1, ID2, lcost, hostIndex, 0);
 				printf("%i %i %i\n", ID1, ID2, lcost);
 			}
 			if(strcmp(command, "step") == 0)
 			{
-				updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
+				updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
 				printf("Step Successful\n");
 			}
 			if(strcmp(command, "packets") == 0)
@@ -839,7 +1076,13 @@ int main(int argc, char* argv[])
 			}
 			if(strcmp(command, "crash") == 0)
 			{
-				printf("Crash\n");
+				for(int i = 0; i < 5; i++)
+				{
+					disableList[i] = 1;
+				}
+				printf("crash SUCCESS\n");
+				display(ServerList, hostIndex, disableList);
+				return 0;
 			}
 			if(strcmp(command, "disable") == 0)
 			{
@@ -851,9 +1094,10 @@ int main(int argc, char* argv[])
 				if(disable(&ServerList, disableID, hostIndex))
 				{
 					disableList[disableID-1] = 1;
-					updateNeighbors(ServerList, hostIndex, numServers, 1, disableID);
-					update(&ServerList, hostIndex, disableID, -1, hostIndex);
+					//updateNeighbors(ServerList, hostIndex, numServers, 1, disableID, disableList);
+					update(&ServerList, hostIndex, disableID, -1, hostIndex, 1);
 					printf("disable %i SUCCESS\n", disableID);
+					continue;
 				}
 
 
@@ -866,10 +1110,22 @@ int main(int argc, char* argv[])
 		}
 		if( selectVal == 0) //timeout
 		{
-			printf("SENDING\n");
+			int crashFlag = 1;
+			for(int i = 0; i < 5; i++)
+			{
+				if(i == hostIndex-1)
+					continue;
+				if(disableList[i] == 0)
+					crashFlag = 0;
+			}
+			if(crashFlag == 1)
+			{
+				printf("Crash Detected\n");
+				return 0;
+			}
 			sendStatus += 1;
-			updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
-			/*
+			updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
+
 			if(setupDelay != 0)
 			{
 				for(int i = 0; i < 5; i++)
@@ -878,18 +1134,18 @@ int main(int argc, char* argv[])
 					{
 						missedServers[i] = 0;
 					}
+					/*
 					else if(receivedServers[i] == -1)
 					{
 						continue;
-					}
-					else
+					}*/
+					else if( i != hostIndex-1)
 					{
 						missedServers[i] += 1;
-						printf("MISS %i\n", i+1);
 					}
 					receivedServers[i] = 0; //reset
 				}
-			}*/
+			}
 
 			Node* iter = ServerList;
 			bool isNeighbor = false;
@@ -910,12 +1166,13 @@ int main(int argc, char* argv[])
 					}
 				}
 				*/
-				if((missedServers[i] == unresponseCount) )//&& isNeighbor)
+				if((missedServers[i] >= unresponseCount) )//&& isNeighbor)
 				{
-					printf("SERVER %i SET TO INF\n", i+1);
-					update(&ServerList, hostIndex, i+1, -1, hostIndex);
-					update(&ServerList, i+1, hostIndex, -1, i+1);
-					updateNeighbors(ServerList, hostIndex, numServers, 0, 0);
+					//printf("SERVER %i SET TO INF\n", i+1);
+					disableList[i] = 1;
+					//update(&ServerList, hostIndex, i+1, -1, hostIndex, 1);
+					//update(&ServerList, i+1, hostIndex, -1, i+1, 1);
+					//updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
 
 				}
 			}
