@@ -767,7 +767,18 @@ void readMessage(int fd, int* packetCount, Node** ServerList, int hostIndex, int
 		receivedServers[senderID-1] = 1;
 		if(disableList[senderID-1] == 1)
 		{
+			disableList[senderID-1] = 0;
 			return;
+			/*Node* iterz = ServerList;
+			while(iterz != hostIndex)
+				iterz = iterz->next;
+			for(int v = 0; v < iterz->neighbors.size(); v++)
+			{
+				if(iterz->neighbors.at(v)-> ID == senderID)
+				{
+
+				}
+			}*/
 		}
 		/*
 		if(type == 1)
@@ -1094,7 +1105,7 @@ int main(int argc, char* argv[])
 				if(disable(&ServerList, disableID, hostIndex))
 				{
 					disableList[disableID-1] = 1;
-					//updateNeighbors(ServerList, hostIndex, numServers, 1, disableID, disableList);
+					updateNeighbors(ServerList, hostIndex, numServers, 1, disableID, disableList);
 					update(&ServerList, hostIndex, disableID, -1, hostIndex, 1);
 					printf("disable %i SUCCESS\n", disableID);
 					continue;
@@ -1168,7 +1179,7 @@ int main(int argc, char* argv[])
 				*/
 				if((missedServers[i] >= unresponseCount) )//&& isNeighbor)
 				{
-					//printf("SERVER %i SET TO INF\n", i+1);
+					printf("SERVER %i SET TO INF\n", i+1);
 					disableList[i] = 1;
 					//update(&ServerList, hostIndex, i+1, -1, hostIndex, 1);
 					//update(&ServerList, i+1, hostIndex, -1, i+1, 1);
