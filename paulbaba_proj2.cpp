@@ -17,7 +17,7 @@
 
 #define ERROR  (-1)
 #define OK     (0)
-#define unresponseCount (5)
+#define unresponseCount (3)
 
 int distancePackets = 0;
 
@@ -1131,8 +1131,16 @@ int main(int argc, char* argv[])
 			}
 			if(crashFlag == 1)
 			{
-				printf("Crash Detected\n");
-				return 0;
+				//printf("Crash Detected\n");
+				char buffer[2];
+				printf("No responses from any servers. Detecting a crash\n");
+			//	std::cin.getline(buffer, 1);
+			//	if(buffer[0] == 'y' || buffer[0] == 'Y')
+					return 0;
+			//	else
+			//	{
+
+			//	}
 			}
 			sendStatus += 1;
 			updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
