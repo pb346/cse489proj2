@@ -468,108 +468,7 @@ void display(Node* ServerList, int hostIndex, int disableList[])
 		}
 
 	}
-
-
-
-
-
-
-
-
-
-
-
-			/*
-			if( iter->neighbors.at(j)->ID == i)
-			{
-														//server is direct neighbor
-				directNeigh = iter->neighbors.at(j)->ID;
-				break;
-			}
-		}
-		if(directNeigh == -1)													//not direct neighbor, try searching
-		{
-			for(int j = 0; j< iter->neighbors.size(); j++)//search each of server neighbors						//search links of server's neighbors
-			{
-				int discover = iter->neighbors.at(j)->ID;
-				int index = 0;
-				while(iter2->serverID != discover)//pull up neighbor node
-					iter2 = iter2->next;
-				for(int z = 0; z < iter2->neighbors.size(); z++)//check list for i
-				{
-					if(iter2->neighbors.at(z)->ID == i)
-					{
-						if(tempNeigh ==-1)
-						{
-							tempNeigh = iter2->serverID;
-						}
-						else if(iter2->neighbors.at(z)->cost < iter2->neighbors.at(tempNeigh)->cost)
-						{
-							tempNeigh = iter2->neighbors.at(z)->ID;
-							index = z;
-						}
-						//directNeigh = iter2->serverID;
-						//cost += iter2->neighbors.at(z)->cost;
-					}
-					//if(tempMain == -1)
-					//{
-					//	tempMain = tempNeigh;
-					//}
-					//if(1 )
-					//{
-
-					//}
-				}
-
-
-			}
-		}
-		printf("     %i                  %i            %i\n", i, i, i );
-
-
-	}*/
-	/*
-	std::vector<int> neighbors;
-	int counter = 1;
-	while(iter!= NULL)
-	{
-		for(int i = 0; i < (int)iter->neighbors.size(); i++)
-		{
-			printf("        %i                 %i",
-					counter, iter->neighbors.at(i)->ID);
-			neighbors.push_back(iter->neighbors.at(i)->ID);
-			if(iter->neighbors.at(i)->cost == -1 || iter->neighbors.at(i)->cost > 30)
-			{
-				printf("		inf\n");
-			}
-			else
-			{
-				printf("		%i\n", iter->neighbors.at(i)->cost);
-			}
-
-		}
-		counter+=1;
-		iter = iter->next;
-	}*/
-	/*
-	for(int i = 0; i < (int)neighbors.size(); i++)
-	{
-		iter2 = ServerList;
-		while(iter2 != NULL)
-		{
-			if(iter2->serverID == neighbors.at(i) && (iter2->serverID != (hostIndex)))
-			{
-				printf("        %i                 %i",
-						iter2->serverID, 0);
-
-				printf("		inf\n");
-
-			}
-			iter2 = iter2->next;
-		}
-	}*/
 	printf("\ndisplay SUCCESS\n");
-
 }
 Node* readInput(int hostIndex, char* file, char* localIP, int* port, int* numServers)
 {
@@ -722,13 +621,6 @@ void readMessage(int fd, int* packetCount, Node** ServerList, int hostIndex, int
 	struct sockaddr_in nothing;
 	Node* iter = *ServerList;
 	Node* iter2 = *ServerList;
-	/*memset((char*)&receive, 0, sizeof(receive));
-	receive.sin_family = AF_INET;
-	receive.sin_port = htons(4091);
-	receive.sin_addr.s_addr = htonl(INADDR_ANY);
-	if(bind(fd, (struct sockaddr *) &receive, sizeof(receive) )<0)
-		perror("BIND");
-	*/
 	socklen_t addrlen = sizeof(nothing);
 	memset(buf, 0, sizeof(buf));
 	int recvlen = recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr *)&nothing, &addrlen);
@@ -768,50 +660,8 @@ void readMessage(int fd, int* packetCount, Node** ServerList, int hostIndex, int
 		if(disableList[senderID-1] == 1)
 		{
 			disableList[senderID-1] = 0;
-			return;
-			/*Node* iterz = ServerList;
-			while(iterz != hostIndex)
-				iterz = iterz->next;
-			for(int v = 0; v < iterz->neighbors.size(); v++)
-			{
-				if(iterz->neighbors.at(v)-> ID == senderID)
-				{
-
-				}
-			}*/
+                        return;
 		}
-		/*
-		if(type == 1)
-		{
-			printf("BEING DISABLED\n");
-			printf("From sender %i\n", senderID);
-			Node* iter = ServerList;
-			while(iter->serverID != hostIndex)
-				iter = iter->next;
-			Node* iter2 = ServerList;
-			while(iter2->serverID != senderID)
-				iter2 = iter2->next;
-
-			for(int i = 0; i < iter->neighbors.size(); i++)
-			{
-				if(iter->neighbors.at(i)->ID == senderID)
-				{
-					iter->neighbors.at(i)->cost = -1;
-					break;
-				}
-			}
-			for(int i = 0; i < iter2->neighbors.size(); i++)
-			{
-				if(iter2->neighbors.at(i)->ID == hostIndex)
-				{
-					iter2->neighbors.at(i)->cost = -1;
-					break;
-				}
-			}
-			return;
-
-		}
-		*/
 		if(senderID == -1)
 			return;
 		printf("RECEIVED A MESSAGE FROM SERVER %i\n", senderID);
@@ -922,7 +772,6 @@ void readMessage(int fd, int* packetCount, Node** ServerList, int hostIndex, int
 				newLink->ID = ID;
 				newLink->cost = cost;
 				iter->neighbors.push_back(newLink);
-
 			}
 		}
 		return;
@@ -1121,6 +970,7 @@ int main(int argc, char* argv[])
 		}
 		if( selectVal == 0) //timeout
 		{
+                    /*
 			int crashFlag = 1;
 			for(int i = 0; i < 5; i++)
 			{
@@ -1141,7 +991,7 @@ int main(int argc, char* argv[])
 			//	{
 
 			//	}
-			}
+                        }*/
 			sendStatus += 1;
 			updateNeighbors(ServerList, hostIndex, numServers, 0, 0, disableList);
 
